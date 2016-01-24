@@ -13,6 +13,7 @@ import qualified Network.WebSockets as WS
 import qualified Wuss as WS
 import Network.HTTP.Conduit
 import Control.Applicative
+import Control.Concurrent (forkIO, threadDelay)
 import Control.Monad
 import Data.Monoid
 import Data.Default
@@ -22,6 +23,10 @@ import Debug.Trace
 import qualified Data.Map as M
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.ByteString.Char8 as C8
+import Pipes
+import Pipes.Concurrent
+import qualified Pipes.Prelude as P
+import System.IO
 
 data AuthToken = UserToken C8.ByteString
                | PublicToken C8.ByteString
@@ -68,13 +73,29 @@ login user pass = do
     let obj = decode (responseBody response) :: Maybe (M.Map String String)
     return $ UserToken . C8.pack <$> (M.lookup "auth_token" =<< obj)
 
-subscribe :: AuthToken -> String -> IO (Maybe [ContestEvent])
-subscribe (UserToken ouat) contestAlias = do
-    let header = [("Cookie", "ouat=" <> ouat), ("Sec-WebSocket-Protocol", "com.omegaup.events")]
+subscribe :: AuthToken -> String -> Output String -> IO ()
+subscribe (UserToken ouat) contestAlias output = do
+    let header = [("Cookie", "ouat=" <> ouat)
+                 ,("Sec-WebSocket-Protocol", "com.omegaup.events")
+                 ]
         path = "/api/contest/events/" ++ contestAlias
-    Just <$> WS.runSecureClientWith "omegaup.com" 443 path WS.defaultConnectionOptions header loop
-    where loop conn = do
-            WS.sendDataMessage conn (WS.Text "ping")
-            msg <- WS.receiveDataMessage conn
-            traceShow msg (return ())
-            (RunUpdate:) <$> loop conn
+
+    void . liftIO $ WS.runSecureClientWith "omegaup.com"
+                                           443
+                                           path
+                                           WS.defaultConnectionOptions
+                                           header
+                                           manage
+
+    where manage :: WS.Connection -> IO ()
+          manage conn = do
+            void . forkIO . forever $ do -- FIXME: handle closed connection
+                threadDelay (3*10^7 :: Int)
+                WS.sendDataMessage conn (WS.Text "ping")
+
+            void . forkIO . runEffect $ loop >-> toOutput output
+
+            where loop = do
+                    m <- lift $ WS.receiveDataMessage conn
+                    yield (show m)
+                    loop
