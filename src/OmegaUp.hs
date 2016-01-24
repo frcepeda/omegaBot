@@ -82,8 +82,6 @@ subscribe (UserToken ouat) contestAlias output = do
             where loop = do
                     (WS.Text m) <- lift $ WS.receiveDataMessage conn
 
-                    traceShow m (return ())
-
                     let eventP = eitherDecode' m
                         event = either (flip trace undefined) id eventP
 
