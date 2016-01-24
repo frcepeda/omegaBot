@@ -22,7 +22,6 @@ main = do
     runEffect $ fromInput input >-> z
 
     where z = do
-                w <- await
-                lift $ print w
-                lift $ hFlush stdout
-                z
+            w <- await
+            lift $ print w
+            z

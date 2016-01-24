@@ -1,12 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveGeneric #-}
 
 module OmegaUp
-    ( login
-    , AuthToken
+    ( module OmegaUp.Types
+    , login
     , query
     , subscribe
     ) where
+
+import OmegaUp.Types
 
 import Network.Connection (TLSSettings (..))
 import qualified Network.WebSockets as WS
@@ -16,6 +17,7 @@ import Control.Applicative
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Monad
 import Data.Monoid
+import Data.Either
 import Data.Default
 import Data.Function
 import Data.Aeson
@@ -31,24 +33,6 @@ import System.IO
 data AuthToken = UserToken C8.ByteString
                | PublicToken C8.ByteString
     deriving (Show)
-
-data ClarificationData = ClarificationData
-    { clarification_id :: Int
-    , contest_alias :: String
-    , problem_alias :: String
-    , author :: Maybe String
-    --, time :: DateTime
-    , message :: String
-    , answer :: Maybe String
-    } deriving (Show)
-
-instance Eq ClarificationData where
-    (==) = (==) `on` clarification_id 
-
-data ContestEvent = RunUpdate
-                  | ClarificationUpdate ClarificationData
-                  | ScoreboardUpdate
-    deriving (Show, Eq)
 
 query :: C8.ByteString -> Maybe AuthToken -> [(C8.ByteString, Maybe C8.ByteString)] -> IO (Response LB.ByteString)
 query path auth opts = withManager (\man -> httpLbs req man)
@@ -73,7 +57,7 @@ login user pass = do
     let obj = decode (responseBody response) :: Maybe (M.Map String String)
     return $ UserToken . C8.pack <$> (M.lookup "auth_token" =<< obj)
 
-subscribe :: AuthToken -> String -> Output String -> IO ()
+subscribe :: AuthToken -> String -> Output ContestEvent -> IO ()
 subscribe (UserToken ouat) contestAlias output = do
     let header = [("Cookie", "ouat=" <> ouat)
                  ,("Sec-WebSocket-Protocol", "com.omegaup.events")
@@ -96,6 +80,12 @@ subscribe (UserToken ouat) contestAlias output = do
             void . forkIO . runEffect $ loop >-> toOutput output
 
             where loop = do
-                    m <- lift $ WS.receiveDataMessage conn
-                    yield (show m)
+                    (WS.Text m) <- lift $ WS.receiveDataMessage conn
+
+                    traceShow m (return ())
+
+                    let eventP = eitherDecode' m
+                        event = either (flip trace undefined) id eventP
+
+                    yield $ (event :: ContestEvent)
                     loop
