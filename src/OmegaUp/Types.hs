@@ -17,6 +17,10 @@ import qualified Data.ByteString.Lazy.Char8 as C8 (toStrict)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
+data AuthToken = UserToken C8.ByteString
+               | PublicToken C8.ByteString
+    deriving (Show)
+
 class Slackable a where
     toSlack :: a -> C8.ByteString
 
@@ -62,7 +66,8 @@ instance Slackable ContestEvent where
                          <> (if _answered then
                                "\nA: \"" <> _answer <> "\""
                              else "")
-                 _title = "Clarification for "
+                 _title = "Clarification (#"
+                         <> clarification_id c <> ") for "
                          <> _problem <> " by " <> _author <> ":"
                  _problem = problem_alias c
                  _author = author c

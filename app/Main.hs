@@ -3,6 +3,7 @@
 
 module Main where
 
+import Network.Wai.Handler.Warp
 import Control.Concurrent
 import Control.Applicative
 import System.IO
@@ -19,6 +20,8 @@ main = do
 
     (Just auth) <- OUp.login user pass
     --print =<< OUp.query "/api/session/currentsession" (Just auth) []
+
+    forkIO $ runEnv 4353 (S.commandHandler auth)
 
     (output, input) <- spawn unbounded
     OUp.subscribe auth "wstest" output

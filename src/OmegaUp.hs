@@ -4,6 +4,7 @@ module OmegaUp
     ( module OmegaUp.Types
     , login
     , query
+    , answerClarification
     , subscribe
     ) where
 
@@ -25,14 +26,12 @@ import Debug.Trace
 import qualified Data.Map as M
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.ByteString.Char8 as C8
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Pipes
 import Pipes.Concurrent
 import qualified Pipes.Prelude as P
 import System.IO
-
-data AuthToken = UserToken C8.ByteString
-               | PublicToken C8.ByteString
-    deriving (Show)
 
 query :: C8.ByteString -> Maybe AuthToken -> [(C8.ByteString, Maybe C8.ByteString)] -> IO (Response LB.ByteString)
 query path auth opts = withManager (\man -> httpLbs req man)
@@ -56,6 +55,14 @@ login user pass = do
     --guard $ statusIsSuccessful (responseStatus response)
     let obj = decode (responseBody response) :: Maybe (M.Map String String)
     return $ UserToken . C8.pack <$> (M.lookup "auth_token" =<< obj)
+
+answerClarification :: AuthToken -> T.Text -> T.Text -> Bool -> IO (Response LB.ByteString)
+answerClarification auth cId answer public = do
+    let opts = [("clarification_id", Just $ T.encodeUtf8 cId)
+               ,("answer", Just $ T.encodeUtf8 answer)
+               ,("public", Just $ if public then "1" else "0")
+               ]
+    query "/api/clarification/update" (Just auth) opts
 
 subscribe :: AuthToken -> String -> Output ContestEvent -> IO ()
 subscribe (UserToken ouat) contestAlias output = do
