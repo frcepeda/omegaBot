@@ -6,6 +6,7 @@ module Main where
 import Network.Wai.Handler.Warp
 import Control.Concurrent
 import Control.Applicative
+import Control.Monad
 import System.IO
 import System.Environment
 import qualified OmegaUp as OUp
@@ -19,12 +20,17 @@ main = do
     [user, pass, path] <- words <$> readFile "config"
 
     (Just auth) <- OUp.login user pass
-    --print =<< OUp.query "/api/session/currentsession" (Just auth) []
+    print =<< OUp.query "/api/session/currentsession" (Just auth) []
 
     forkIO $ runEnv 4353 (S.commandHandler auth)
 
     (output, input) <- spawn unbounded
-    OUp.subscribe auth "wstest" output
+
+    forM_ ["OMIS2016PUBLICO"
+          ,"OMIP2016PUBLICO"
+          ,"OMIS2016"
+          ,"OMIP2016"
+          ] $ \c -> OUp.subscribe auth c output
 
     runEffect $ fromInput input >-> (toSlack (C8.pack path))
 

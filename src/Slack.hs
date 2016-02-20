@@ -46,6 +46,11 @@ commandHandler auth req respond = do
             let (cId, rest) = T.span (/= ' ') text
             r <- answerClarification auth cId (T.tail rest) False
             reply (C.responseBody r)
+        "/answer-public" -> do
+            let text = T.decodeUtf8 $ jlookup "text" args
+            let (cId, rest) = T.span (/= ' ') text
+            r <- answerClarification auth cId (T.tail rest) True
+            reply (C.responseBody r)
         _ -> reply "Unknown command."
     where reply = respond . responseLBS status200 []
           jlookup k l = fromJust (fromJust (lookup k l))
