@@ -24,6 +24,10 @@ data AuthToken = UserToken C8.ByteString
 class Slackable a where
     toSlack :: a -> C8.ByteString
 
+instance Slackable T.Text where
+    toSlack m = "{\"text\": \"" <> T.encodeUtf8 escaped <> "\"}"
+        where escaped = T.replace "\"" "\\\"" m
+
 data ClarificationData = ClarificationData
     { clarification_id :: T.Text
     , contest_alias :: Maybe T.Text
@@ -39,9 +43,8 @@ instance A.FromJSON ClarificationData
 instance Eq ClarificationData where
     (==) = (==) `on` clarification_id 
 
-instance Slackable ContestEvent where
-    toSlack (ClarificationUpdate c)
-         = C8.toStrict . A.encode . obj $ [
+instance Slackable ClarificationData where
+    toSlack c = C8.toStrict . A.encode . obj $ [
             ("attachments"
             , arr [
                 obj [("fallback", A.String fallback)
@@ -78,6 +81,8 @@ instance Slackable ContestEvent where
                  green = "#52F71B"
                  red = "#F7521B"
 
+instance Slackable ContestEvent where
+    toSlack (ClarificationUpdate c) = toSlack c
     toSlack _ = "{\"text\":\"error\"}"
 
 data ContestEvent = RunUpdate

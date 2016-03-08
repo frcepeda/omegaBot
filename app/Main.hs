@@ -5,6 +5,7 @@ module Main where
 
 import Network.Wai.Handler.Warp
 import Control.Concurrent
+import Control.Concurrent.MVar
 import Control.Applicative
 import Control.Monad
 import System.IO
@@ -17,25 +18,40 @@ import qualified Slack as S
 import qualified Data.ByteString.Char8 as C8
 
 main = do
-    [user, pass, path] <- words <$> readFile "config"
+    [user, pass, path'] <- words <$> readFile "config"
+    let path = C8.pack path'
 
     (Just auth) <- OUp.login user pass
     print =<< OUp.query "/api/session/currentsession" (Just auth) []
 
-    forkIO $ runEnv 4353 (S.commandHandler auth)
+    {-
+    let contests = ["OMIS2016NACIONAL"
+                   ,"OMIP2016NACIONAL"
+                   ,"OMI2016DIA1"
+                   ,"OMI2016DIA1PUBLICO"
+                   ,"OMIP2016NACIONALPUBLICO"
+                   ,"OMIS2016NACIONALPUBLICO"
+                   ]
+    -}
+    let contests = ["WSTEST", "CR82"]
+
+    mcontests <- newMVar contests
+
+    let cfg = S.HandlerConfig
+                { S.slackUrl = path
+                , S.subscriptions = mcontests
+                , S.auth = auth
+                }
+
+    forkIO $ runEnv 4353 (S.commandHandler cfg)
 
     (output, input) <- spawn unbounded
 
-    forM_ ["OMIS2016PUBLICO"
-          ,"OMIP2016PUBLICO"
-          ,"OMIS2016"
-          ,"OMIP2016"
-          ] $ \c -> OUp.subscribe auth c output
+    forM_ contests $ \c -> OUp.subscribe auth c output
 
-    runEffect $ fromInput input >-> (toSlack (C8.pack path))
+    runEffect $ fromInput input >-> (forever $ toSlack path)
 
     where toSlack p = do
             w <- await
             lift $ C8.putStrLn $ OUp.toSlack w
-            lift $ S.postMessage p (OUp.toSlack w)
-            toSlack p
+            lift $ S.postMessage p w

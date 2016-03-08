@@ -5,6 +5,8 @@ module OmegaUp
     , login
     , query
     , answerClarification
+    , clarifications
+    , unansweredClarifications
     , subscribe
     ) where
 
@@ -17,6 +19,7 @@ import Network.HTTP.Conduit
 import Control.Applicative
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Monad
+import Data.Maybe
 import Data.Monoid
 import Data.Either
 import Data.Default
@@ -64,6 +67,17 @@ answerClarification auth cId answer public = do
                ]
     query "/api/clarification/update" (Just auth) opts
 
+clarifications :: AuthToken -> T.Text -> IO [ClarificationData]
+clarifications auth cId = do
+    let opts = [("contest_alias", Just $ T.encodeUtf8 cId)
+               ]
+    r <- query "/api/contest/clarifications" (Just auth) opts
+    return . maybe [] id . decode . responseBody $ r
+
+unansweredClarifications :: AuthToken -> T.Text -> IO [ClarificationData]
+unansweredClarifications auth cId = filter unanswered <$> clarifications auth cId
+    where unanswered = isNothing . answer
+
 subscribe :: AuthToken -> String -> Output ContestEvent -> IO ()
 subscribe (UserToken ouat) contestAlias output = do
     let header = [("Cookie", "ouat=" <> ouat)
@@ -90,7 +104,9 @@ subscribe (UserToken ouat) contestAlias output = do
                     (WS.Text m) <- lift $ WS.receiveDataMessage conn
 
                     let eventP = eitherDecode' m
-                        event = either (flip trace undefined) id eventP
 
-                    yield $ (event :: ContestEvent)
+                    case eventP of
+                        Right x -> yield $ (x :: ContestEvent)
+                        Left l -> traceShowM l
+
                     loop
