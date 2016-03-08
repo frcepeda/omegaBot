@@ -25,6 +25,7 @@ import Data.Either
 import Data.Default
 import Data.Function
 import Data.Aeson
+import Data.Aeson.Types
 import Debug.Trace
 import qualified Data.Map as M
 import qualified Data.ByteString.Lazy as LB
@@ -65,14 +66,21 @@ answerClarification auth cId answer public = do
                ,("answer", Just $ T.encodeUtf8 answer)
                ,("public", Just $ if public then "1" else "0")
                ]
+
     query "/api/clarification/update" (Just auth) opts
 
 clarifications :: AuthToken -> T.Text -> IO [ClarificationData]
 clarifications auth cId = do
     let opts = [("contest_alias", Just $ T.encodeUtf8 cId)
                ]
+
     r <- query "/api/contest/clarifications" (Just auth) opts
-    return . maybe [] id . decode . responseBody $ r
+
+    let obj = decode' (responseBody r)
+    let cs = obj >>= M.lookup ("clarifications" :: String)
+                 >>= parseMaybe parseJSON
+
+    return $ maybe [] id cs
 
 unansweredClarifications :: AuthToken -> T.Text -> IO [ClarificationData]
 unansweredClarifications auth cId = filter unanswered <$> clarifications auth cId

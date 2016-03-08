@@ -65,7 +65,7 @@ commandHandler HandlerConfig{..} req respond = do
         "/unanswered" -> do
             contests <- readMVar subscriptions
             forM_ contests $ \c -> do
-                cs <- unansweredClarifications auth text
+                cs <- unansweredClarifications auth (T.pack c)
                 forM_ cs (postMessage slackUrl)
             reply ""
         _ -> reply "Unknown command."

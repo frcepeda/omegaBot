@@ -24,7 +24,6 @@ main = do
     (Just auth) <- OUp.login user pass
     print =<< OUp.query "/api/session/currentsession" (Just auth) []
 
-    {-
     let contests = ["OMIS2016NACIONAL"
                    ,"OMIP2016NACIONAL"
                    ,"OMI2016DIA1"
@@ -32,8 +31,6 @@ main = do
                    ,"OMIP2016NACIONALPUBLICO"
                    ,"OMIS2016NACIONALPUBLICO"
                    ]
-    -}
-    let contests = ["WSTEST", "CR82"]
 
     mcontests <- newMVar contests
 
