@@ -63,11 +63,17 @@ commandHandler HandlerConfig{..} req respond = do
             postMessage slackUrl (user <> " replied to #" <> cId)
             reply (C.responseBody r)
         "/unanswered" -> do
-            contests <- readMVar subscriptions
-            forM_ contests $ \c -> do
-                cs <- unansweredClarifications auth (T.pack c)
+            forkIO $ do
+                contests <- readMVar subscriptions
+
+                let getClars = unansweredClarifications auth . T.pack
+                cs <- concat <$> forM contests getClars
+
                 forM_ cs (postMessage slackUrl)
-            reply ""
+
+                when (null cs) $
+                    postMessage slackUrl ("No unanswered clarifications." :: T.Text)
+            reply "Looking for unanswered clarifications..."
         _ -> reply "Unknown command."
     where reply = respond . responseLBS status200 []
           jlookup k l = fromJust (fromJust (lookup k l))
