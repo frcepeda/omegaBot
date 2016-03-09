@@ -17,16 +17,11 @@ import qualified Data.ByteString.Lazy.Char8 as C8 (toStrict)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
+import Slack.Types
+
 data AuthToken = UserToken C8.ByteString
                | PublicToken C8.ByteString
     deriving (Show)
-
-class Slackable a where
-    toSlack :: a -> C8.ByteString
-
-instance Slackable T.Text where
-    toSlack m = "{\"text\": \"" <> T.encodeUtf8 escaped <> "\"}"
-        where escaped = T.replace "\"" "\\\"" m
 
 data ClarificationData = ClarificationData
     { clarification_id :: T.Text

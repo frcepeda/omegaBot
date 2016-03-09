@@ -1,13 +1,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module Slack.Types where
+module Slack.Types
+    ( Slackable(..)
+    ) where
 
+import Data.Monoid
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 
-data SlackCommand = Reply ClarificationResponse
+class Slackable a where
+    toSlack :: a -> C8.ByteString
 
-data ClarificationResponse = ClarificationResponse
-           { clarification_id :: T.Text
-           , answer :: T.Text
-           }
+instance Slackable T.Text where
+    toSlack m = "{\"text\": \"" <> T.encodeUtf8 escaped <> "\"}"
+        where escaped = T.replace "\"" "\\\"" m
+

@@ -9,6 +9,8 @@ module Slack
 
 import OmegaUp
 import OmegaUp.Types
+import Slack.Types
+
 import Network.Wai
 import Network.Connection (TLSSettings (..))
 import qualified Network.HTTP.Conduit as C

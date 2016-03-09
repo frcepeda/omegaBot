@@ -3,6 +3,9 @@
 
 module Main where
 
+import qualified OmegaUp as OUp
+import qualified Slack as S
+
 import Network.Wai.Handler.Warp
 import Control.Concurrent
 import Control.Concurrent.MVar
@@ -10,11 +13,9 @@ import Control.Applicative
 import Control.Monad
 import System.IO
 import System.Environment
-import qualified OmegaUp as OUp
 import Pipes
 import Pipes.Concurrent
 import qualified Pipes.Prelude as P
-import qualified Slack as S
 import qualified Data.ByteString.Char8 as C8
 
 main = do
@@ -48,7 +49,4 @@ main = do
 
     runEffect $ fromInput input >-> (forever $ toSlack path)
 
-    where toSlack p = do
-            w <- await
-            lift $ C8.putStrLn $ OUp.toSlack w
-            lift $ S.postMessage p w
+    where toSlack p = lift . S.postMessage p =<< await
