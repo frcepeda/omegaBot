@@ -7,17 +7,15 @@ license:             BSD3
 license-file:        LICENSE
 author:              Freddy Román
 maintainer:          me@freddy.mx
-copyright:           2015 Freddy Román
+copyright:           2016 Freddy Román
 category:            Web
 build-type:          Simple
--- extra-source-files:
 cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
   exposed-modules:     OmegaUp, Slack
   other-modules:       OmegaUp.Types, Slack.Types
---  build-depends:       base >= 4.7 && < 5, websockets-0.9.6.1, data-default-0.5.3, http-conduit-2.1.8
   build-depends:       base >= 4.7 && < 5,
                        websockets, data-default, http-conduit, connection,
                        aeson, bytestring, wuss, pipes,
@@ -33,15 +31,6 @@ executable omegaBot-exe
                        bytestring, omegaBot, warp
   default-language:    Haskell2010
 
-test-suite omegaBot-test
-  type:                exitcode-stdio-1.0
-  hs-source-dirs:      test
-  main-is:             Spec.hs
-  build-depends:       base
-                     , omegaBot
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  default-language:    Haskell2010
-
 source-repository head
   type:     git
-  location: https://github.com/githubuser/omegaBot
+  location: https://github.com/frcepeda/omegaBot
