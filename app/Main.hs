@@ -18,25 +18,23 @@ import Pipes.Concurrent
 import qualified Pipes.Prelude as P
 import qualified Data.ByteString.Char8 as C8
 
-main = do
-    [user, pass, path'] <- words <$> readFile "config"
-    let path = C8.pack path'
+data BotConfig = BotConfig
+    { user :: String
+    , pass :: String
+    , path :: C8.ByteString
+    , contests :: [String]
+    } deriving (Read, Show)
 
-    (Just auth) <- OUp.login user pass
+main = do
+    config <- read <$> readFile "config"
+
+    (Just auth) <- OUp.login (user config) (pass config)
     print =<< OUp.query "/api/session/currentsession" (Just auth) []
 
-    let contests = ["OMIS2016NACIONAL"
-                   ,"OMIP2016NACIONAL"
-                   ,"OMI2016DIA1"
-                   ,"OMI2016DIA1PUBLICO"
-                   ,"OMIP2016NACIONALPUBLICO"
-                   ,"OMIS2016NACIONALPUBLICO"
-                   ]
-
-    mcontests <- newMVar contests
+    mcontests <- newMVar (contests config)
 
     let cfg = S.HandlerConfig
-                { S.slackUrl = path
+                { S.slackUrl = path config
                 , S.subscriptions = mcontests
                 , S.auth = auth
                 }
@@ -45,8 +43,8 @@ main = do
 
     (output, input) <- spawn unbounded
 
-    forM_ contests $ \c -> OUp.subscribe auth c output
+    forM_ (contests config) $ \c -> OUp.subscribe auth c output
 
-    runEffect $ fromInput input >-> (forever $ toSlack path)
+    runEffect $ fromInput input >-> (forever $ toSlack (path config))
 
     where toSlack p = lift . S.postMessage p =<< await
