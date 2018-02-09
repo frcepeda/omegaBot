@@ -91,7 +91,7 @@ subscribe (UserToken ouat) contestAlias output = do
     let header = [("Cookie", "ouat=" <> ouat)
                  ,("Sec-WebSocket-Protocol", "com.omegaup.events")
                  ]
-        path = "/api/contest/events/" ++ contestAlias
+        path = "/events/?filter=/contest/" ++ contestAlias
 
     void . liftIO $ WS.runSecureClientWith "omegaup.com"
                                            443
@@ -110,6 +110,8 @@ subscribe (UserToken ouat) contestAlias output = do
 
             where loop = do
                     (WS.Text m) <- lift $ WS.receiveDataMessage conn
+
+		    traceShowM m
 
                     let eventP = eitherDecode' m
 

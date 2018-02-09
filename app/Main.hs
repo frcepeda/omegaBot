@@ -39,7 +39,7 @@ main = do
                 , S.auth = auth
                 }
 
-    forkIO $ runEnv 4353 (S.commandHandler cfg)
+    forkIO $ runEnv 59947 (S.commandHandler cfg)
 
     (output, input) <- spawn unbounded
 
