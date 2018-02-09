@@ -77,7 +77,7 @@ instance Slackable ClarificationData where
                              else "")
                  _title = "Clarification (#"
                          <> (toText . clarification_id) c
-			 <> ") for " <> _problem <> " by " <> _author <> ":"
+                         <> ") for " <> _problem <> " by " <> _author <> ":"
                  _problem = problem_alias c
                  _author = author c
                  _question = message c
