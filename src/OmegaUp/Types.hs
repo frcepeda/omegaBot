@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module OmegaUp.Types where
 
@@ -23,8 +24,18 @@ data AuthToken = UserToken C8.ByteString
                | PublicToken C8.ByteString
     deriving (Show)
 
+newtype ClarificationID = ClarificationID { toText :: T.Text }
+    deriving (Show, Eq)
+
+instance A.FromJSON ClarificationID where
+    parseJSON v
+        = ClarificationID
+        <$> (A.parseJSON v
+             <|> ((T.pack . (show :: Integer -> String))
+                  <$> A.parseJSON v))
+
 data ClarificationData = ClarificationData
-    { clarification_id :: T.Text
+    { clarification_id :: ClarificationID
     , contest_alias :: Maybe T.Text
     , problem_alias :: T.Text
     , author :: T.Text
@@ -65,8 +76,8 @@ instance Slackable ClarificationData where
                                "\nA: \"" <> _answer <> "\""
                              else "")
                  _title = "Clarification (#"
-                         <> clarification_id c <> ") for "
-                         <> _problem <> " by " <> _author <> ":"
+                         <> (toText . clarification_id) c
+			 <> ") for " <> _problem <> " by " <> _author <> ":"
                  _problem = problem_alias c
                  _author = author c
                  _question = message c
