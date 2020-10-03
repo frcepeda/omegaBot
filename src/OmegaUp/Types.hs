@@ -10,6 +10,7 @@ import Control.Applicative
 import Data.Function
 import Data.Maybe
 import Data.Monoid
+import Data.Scientific
 import qualified Data.Aeson as A
 import qualified Data.Vector as V
 import qualified Data.HashMap.Strict as HM
@@ -26,6 +27,12 @@ data AuthToken = UserToken C8.ByteString
 
 newtype ClarificationID = ClarificationID { toText :: T.Text }
     deriving (Show, Eq)
+
+newtype ProblemsetID = ProblemsetID { toInt :: Int }
+    deriving (Show, Eq)
+
+instance A.FromJSON ProblemsetID where
+    parseJSON = A.withScientific "ProblemsetID" (return . ProblemsetID . fromJust . toBoundedInteger)
 
 instance A.FromJSON ClarificationID where
     parseJSON v
@@ -45,6 +52,12 @@ data ClarificationData = ClarificationData
     } deriving (Show, Generic)
 
 instance A.FromJSON ClarificationData
+
+data AdminDetails = AdminDetails
+    { problemset_id :: ProblemsetID
+    } deriving (Show, Generic)
+
+instance A.FromJSON AdminDetails
 
 instance Eq ClarificationData where
     (==) = (==) `on` clarification_id 

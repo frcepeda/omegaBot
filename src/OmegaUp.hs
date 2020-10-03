@@ -38,17 +38,20 @@ import qualified Pipes.Prelude as P
 import System.IO
 
 query :: C8.ByteString -> Maybe AuthToken -> [(C8.ByteString, Maybe C8.ByteString)] -> IO (Response LB.ByteString)
-query path auth opts = withManager (\man -> httpLbs req man)
+query path auth opts = do
+    manager <- newManager tlsManagerSettings
+    response <- httpLbs req manager
+    --traceShowM response
+    return response
     where req = setQueryString opts' q
-          q = def
-            { host = "omegaup.com"
-            , port = 443
-            , secure = True
-            , path = path
-            }
+          q = defaultRequest { host = "omegaup.com"
+                             , port = 443
+                             , secure = True
+                             , path = path
+                             }
           opts' = case auth of
                     Nothing              -> opts
-                    Just (UserToken t)   -> ("auth_token", Just t) : opts
+                    Just (UserToken t)   -> ("ouat", Just t) : opts
                     Just (PublicToken t) -> ("token", Just t) : opts
 
 login :: String -> String -> IO (Maybe AuthToken)
@@ -86,37 +89,53 @@ unansweredClarifications :: AuthToken -> T.Text -> IO [ClarificationData]
 unansweredClarifications auth cId = filter unanswered <$> clarifications auth cId
     where unanswered = isNothing . answer
 
+adminDetails :: AuthToken -> T.Text -> IO AdminDetails
+adminDetails auth alias = do
+    let opts = [("contest_alias", Just $ T.encodeUtf8 alias)
+               ]
+
+    traceShowM opts
+
+    r <- query "/api/contest/adminDetails" (Just auth) opts
+
+    let obj = decode' (responseBody r)
+
+    return $ maybe undefined id obj
+
 subscribe :: AuthToken -> String -> Output ContestEvent -> IO ()
-subscribe (UserToken ouat) contestAlias output = do
+subscribe token@(UserToken ouat) contestAlias output = do
+    details <- adminDetails token (T.pack contestAlias)
+
+    traceShowM details
+
+    let psetId = toInt $ problemset_id details
+
     let header = [("Cookie", "ouat=" <> ouat)
                  ,("Sec-WebSocket-Protocol", "com.omegaup.events")
                  ]
-        path = "/events/?filter=/contest/" ++ contestAlias
+        path = "/events/?filter=/problemset/" ++ (show psetId)
 
-    void . liftIO $ WS.runSecureClientWith "omegaup.com"
-                                           443
-                                           path
-                                           WS.defaultConnectionOptions
-                                           header
-                                           manage
+    liftIO . void . forkIO $ WS.runSecureClientWith "omegaup.com"
+                                                    443
+                                                    path
+                                                    WS.defaultConnectionOptions
+                                                    header
+                                                    manage
 
     where manage :: WS.Connection -> IO ()
-          manage conn = do
-            void . forkIO . forever $ do -- FIXME: handle closed connection
-                threadDelay (3*10^7 :: Int)
-                WS.sendDataMessage conn (WS.Text "ping")
+          manage conn = WS.withPingThread conn 30 (putStrLn $ "ping: " ++ contestAlias) $ do
 
-            void . forkIO . runEffect $ loop >-> toOutput output
+              runEffect $ loop >-> toOutput output
 
-            where loop = do
-                    (WS.Text m) <- lift $ WS.receiveDataMessage conn
+              where loop = do
+                      WS.Text m _ <- lift $ WS.receiveDataMessage conn
 
-		    traceShowM m
+                      traceShowM m
 
-                    let eventP = eitherDecode' m
+                      let eventP = eitherDecode' m
 
-                    case eventP of
-                        Right x -> yield $ (x :: ContestEvent)
-                        Left l -> traceShowM l
+                      case eventP of
+                          Right x -> yield $ (x :: ContestEvent)
+                          Left l -> traceShowM l
 
-                    loop
+                      loop

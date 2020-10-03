@@ -13,6 +13,7 @@ import Slack.Types
 
 import Network.Wai
 import Network.Connection (TLSSettings (..))
+import qualified Network.HTTP.Simple as C
 import qualified Network.HTTP.Conduit as C
 import Network.HTTP.Types.Status
 import Network.HTTP.Types.Method
@@ -32,15 +33,15 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
 postMessage :: Slackable a => C8.ByteString -> a -> IO ()
-postMessage path message = void $ C.withManager (\man -> C.httpLbs req man)
-    where req = def
-            { C.host = "hooks.slack.com"
-            , C.port = 443
-            , C.secure = True
-            , C.path = path
-            , C.method = methodPost
-            , C.requestBody = C.RequestBodyBS (toSlack message)
-            }
+postMessage path message = void . C.httpNoBody $ req
+    where req = C.defaultRequest
+                    { C.host = "hooks.slack.com"
+                    , C.port = 443
+                    , C.secure = True
+                    , C.path = path
+                    , C.method = methodPost
+                    , C.requestBody = C.RequestBodyBS (toSlack message)
+                    }
 
 data HandlerConfig = HandlerConfig
         { auth :: AuthToken
