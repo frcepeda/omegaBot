@@ -14,8 +14,8 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     OmegaUp, Slack
-  other-modules:       OmegaUp.Types, Slack.Types
+  exposed-modules:     OmegaUp, OmegaUp.Types, Slack
+  other-modules:       Slack.Types
   build-depends:       base >= 4.7 && < 5,
                        websockets, data-default, http-conduit, connection,
                        aeson, bytestring, wuss, pipes,

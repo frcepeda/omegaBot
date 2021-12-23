@@ -4,6 +4,7 @@
 module Main where
 
 import qualified OmegaUp as OUp
+import qualified OmegaUp.Types as OUp
 import qualified Slack as S
 
 import Network.Wai.Handler.Warp
@@ -17,10 +18,15 @@ import Pipes
 import Pipes.Concurrent
 import qualified Pipes.Prelude as P
 import qualified Data.ByteString.Char8 as C8
+import Data.Maybe
+
+data AuthInfo = UsernamePassword C8.ByteString C8.ByteString
+              | ApiToken C8.ByteString
+    deriving (Read, Show)
 
 data BotConfig = BotConfig
-    { user :: String
-    , pass :: String
+    { authorization :: AuthInfo
+    , tempAuthorization :: AuthInfo -- quark doesn't support api tokens :c
     , path :: C8.ByteString
     , contests :: [String]
     } deriving (Read, Show)
@@ -28,8 +34,16 @@ data BotConfig = BotConfig
 main = do
     config <- read <$> readFile "config"
 
-    (Just auth) <- OUp.login (user config) (pass config)
+    let configToAuth authInfo =
+            case authInfo of
+                UsernamePassword user pass -> fromJust <$> OUp.login user pass
+                ApiToken token -> return . OUp.ApiToken $ token
+    
+    auth <- configToAuth $ authorization config
     print =<< OUp.query "/api/session/currentsession" (Just auth) []
+
+    broadcasterAuth <- configToAuth $ tempAuthorization config
+    print =<< OUp.query "/api/session/currentsession" (Just broadcasterAuth) []
 
     mcontests <- newMVar (contests config)
 
@@ -43,8 +57,8 @@ main = do
 
     (output, input) <- spawn unbounded
 
-    forM_ (contests config) $ \c -> OUp.subscribe auth c output
+    forM_ (contests config) $ \c -> OUp.subscribe broadcasterAuth c output
 
-    runEffect $ fromInput input >-> (forever $ toSlack (path config))
+    runEffect $ fromInput input >-> forever (toSlack (path config))
 
     where toSlack p = lift . S.postMessage p =<< await

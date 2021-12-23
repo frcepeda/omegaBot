@@ -40,24 +40,26 @@ import System.IO
 query :: C8.ByteString -> Maybe AuthToken -> [(C8.ByteString, Maybe C8.ByteString)] -> IO (Response LB.ByteString)
 query path auth opts = do
     manager <- newManager tlsManagerSettings
-    response <- httpLbs req manager
-    --traceShowM response
-    return response
-    where req = setQueryString opts' q
+    httpLbs req manager
+    where req = setQueryString (authOpts ++ opts) q
           q = defaultRequest { host = "omegaup.com"
                              , port = 443
                              , secure = True
                              , path = path
+                             , requestHeaders = headers
                              }
-          opts' = case auth of
-                    Nothing              -> opts
-                    Just (UserToken t)   -> ("ouat", Just t) : opts
-                    Just (PublicToken t) -> ("token", Just t) : opts
+          authOpts = case auth of
+                        Just (UserToken t)   -> [("ouat", Just t)]
+                        Just (PublicToken t) -> [("token", Just t)]
+                        _                    -> []
+          headers = case auth of
+                        Just (ApiToken t) -> [("Authorization", "token " <> t)]
+                        _                 -> []
 
-login :: String -> String -> IO (Maybe AuthToken)
+login :: C8.ByteString -> C8.ByteString -> IO (Maybe AuthToken)
 login user pass = do
-    let opts = [("usernameOrEmail", Just (C8.pack user))
-               ,("password", Just (C8.pack pass))]
+    let opts = [("usernameOrEmail", Just user)
+               ,("password", Just pass)]
     response <- query "/api/user/login" Nothing opts
     --guard $ statusIsSuccessful (responseStatus response)
     let obj = decode (responseBody response) :: Maybe (M.Map String String)
@@ -91,29 +93,28 @@ unansweredClarifications auth cId = filter unanswered <$> clarifications auth cI
 
 adminDetails :: AuthToken -> T.Text -> IO AdminDetails
 adminDetails auth alias = do
-    let opts = [("contest_alias", Just $ T.encodeUtf8 alias)
-               ]
+    let opts = [("contest_alias", Just $ T.encodeUtf8 alias)]
 
     traceShowM opts
 
     r <- query "/api/contest/adminDetails" (Just auth) opts
 
-    let obj = decode' (responseBody r)
-
-    return $ maybe undefined id obj
+    return . fromJust . decode' . responseBody $ r
 
 subscribe :: AuthToken -> String -> Output ContestEvent -> IO ()
-subscribe token@(UserToken ouat) contestAlias output = do
-    details <- adminDetails token (T.pack contestAlias)
+subscribe auth contestAlias output = do
+    details <- adminDetails auth (T.pack contestAlias)
 
     traceShowM details
 
     let psetId = toInt $ problemset_id details
 
-    let header = [("Cookie", "ouat=" <> ouat)
-                 ,("Sec-WebSocket-Protocol", "com.omegaup.events")
-                 ]
-        path = "/events/?filter=/problemset/" ++ (show psetId)
+    let header = [("Cookie", "ouat=" <> ouat) | UserToken ouat <- [auth]] ++
+                 [("Authorization", "token " <> token) | ApiToken token <- [auth]] ++
+                 [("Sec-WebSocket-Protocol", "com.omegaup.events")]
+        path = "/events/?filter=/problemset/" ++ show psetId
+    
+    traceShowM header
 
     liftIO . void . forkIO $ WS.runSecureClientWith "omegaup.com"
                                                     443
@@ -125,17 +126,17 @@ subscribe token@(UserToken ouat) contestAlias output = do
     where manage :: WS.Connection -> IO ()
           manage conn = WS.withPingThread conn 30 (putStrLn $ "ping: " ++ contestAlias) $ do
 
+              traceM "connected!"
+
               runEffect $ loop >-> toOutput output
 
-              where loop = do
+              where loop = forever $ do
                       WS.Text m _ <- lift $ WS.receiveDataMessage conn
 
-                      traceShowM m
-
                       let eventP = eitherDecode' m
+                      
+                      traceShowM eventP
 
                       case eventP of
-                          Right x -> yield $ (x :: ContestEvent)
-                          Left l -> traceShowM l
-
-                      loop
+                          Right x -> yield (x :: ContestEvent)
+                          Left l -> return ()

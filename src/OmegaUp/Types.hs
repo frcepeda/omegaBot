@@ -23,6 +23,7 @@ import Slack.Types
 
 data AuthToken = UserToken C8.ByteString
                | PublicToken C8.ByteString
+               | ApiToken C8.ByteString
     deriving (Show)
 
 newtype ClarificationID = ClarificationID { toText :: T.Text }
@@ -38,7 +39,7 @@ instance A.FromJSON ClarificationID where
     parseJSON v
         = ClarificationID
         <$> (A.parseJSON v
-             <|> ((T.pack . (show :: Integer -> String))
+             <|> (T.pack . (show :: Integer -> String)
                   <$> A.parseJSON v))
 
 data ClarificationData = ClarificationData
@@ -53,14 +54,14 @@ data ClarificationData = ClarificationData
 
 instance A.FromJSON ClarificationData
 
-data AdminDetails = AdminDetails
+newtype AdminDetails = AdminDetails
     { problemset_id :: ProblemsetID
     } deriving (Show, Generic)
 
 instance A.FromJSON AdminDetails
 
 instance Eq ClarificationData where
-    (==) = (==) `on` clarification_id 
+    (==) = (==) `on` clarification_id
 
 instance Slackable ClarificationData where
     toSlack c = C8.toStrict . A.encode . obj $ [
@@ -74,9 +75,7 @@ instance Slackable ClarificationData where
                          obj $ [("title", A.String _question)
                                ,("short", A.Bool False)
                                ] ++
-                               (if _answered then
-                                [("value", A.String _answer)]
-                                else [])
+                               ([("value", A.String _answer) | _answered])
                        ])
                     ]
               ])
@@ -94,7 +93,7 @@ instance Slackable ClarificationData where
                  _problem = problem_alias c
                  _author = author c
                  _question = message c
-                 _answered = maybe False (const True) (answer c)
+                 _answered = isJust (answer c)
                  _answer = fromJust $ answer c
                  _color = if _answered then green else red
                  green = "#52F71B"
