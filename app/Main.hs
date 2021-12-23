@@ -26,7 +26,6 @@ data AuthInfo = UsernamePassword C8.ByteString C8.ByteString
 
 data BotConfig = BotConfig
     { authorization :: AuthInfo
-    , tempAuthorization :: AuthInfo -- quark doesn't support api tokens :c
     , path :: C8.ByteString
     , contests :: [String]
     } deriving (Read, Show)
@@ -34,16 +33,11 @@ data BotConfig = BotConfig
 main = do
     config <- read <$> readFile "config"
 
-    let configToAuth authInfo =
-            case authInfo of
+    auth <- case authorization config of
                 UsernamePassword user pass -> fromJust <$> OUp.login user pass
                 ApiToken token -> return . OUp.ApiToken $ token
-    
-    auth <- configToAuth $ authorization config
-    print =<< OUp.query "/api/session/currentsession" (Just auth) []
 
-    broadcasterAuth <- configToAuth $ tempAuthorization config
-    print =<< OUp.query "/api/session/currentsession" (Just broadcasterAuth) []
+    print =<< OUp.query "/api/session/currentsession" (Just auth) []
 
     mcontests <- newMVar (contests config)
 
@@ -57,7 +51,7 @@ main = do
 
     (output, input) <- spawn unbounded
 
-    forM_ (contests config) $ \c -> OUp.subscribe broadcasterAuth c output
+    forM_ (contests config) $ \c -> OUp.subscribe auth c output
 
     runEffect $ fromInput input >-> forever (toSlack (path config))
 
